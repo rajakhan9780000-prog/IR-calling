@@ -1,0 +1,1413 @@
+
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>I R CALLING - AI Live Translation & Video Calling</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- PeerJS for Real-Time WebRTC Calling -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                        },
+                        dark: {
+                            900: '#0b0f19',
+                            800: '#111827',
+                            700: '#1f2937',
+                            600: '#374151',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .mirror { transform: scaleX(-1); }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: #111827; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+    </style>
+</head>
+<body class="bg-dark-900 text-gray-100 font-sans antialiased selection:bg-brand-500 selection:text-white min-h-screen flex flex-col overflow-x-hidden pb-20 lg:pb-6">
+
+    <!-- Custom Notification Toast -->
+    <div id="toast-container" class="fixed top-4 right-4 left-4 sm:left-auto z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- Admin Announcement Banner (Controlled from Admin Panel) -->
+    <div id="admin-announcement-bar" class="hidden bg-gradient-to-r from-brand-600 to-purple-600 text-white text-xs font-medium py-2 px-4 text-center shadow-md z-30">
+        <span id="admin-announcement-text">Welcome to I R CALLING!</span>
+    </div>
+
+    <!-- Maintenance Mode Screen (Controlled from Admin Panel) -->
+    <div id="maintenance-screen" class="hidden fixed inset-0 bg-dark-900/95 backdrop-blur-lg z-50 flex flex-col items-center justify-center p-6 text-center">
+        <div class="w-20 h-20 rounded-full bg-amber-500/20 border border-amber-500 flex items-center justify-center mb-4">
+            <i data-lucide="wrench" class="w-10 h-10 text-amber-400"></i>
+        </div>
+        <h2 class="text-2xl font-bold text-white">App Under Maintenance</h2>
+        <p class="text-sm text-gray-400 max-w-md mt-2">Admin ne abhi app ko maintenance par rakha hai. Kripya thodi der baad try karein.</p>
+        <button onclick="openAdminModal()" class="mt-6 px-5 py-2.5 rounded-xl bg-dark-800 border border-dark-600 text-xs text-gray-300 hover:text-white">
+            Admin Login
+        </button>
+    </div>
+
+    <!-- Mobile Number Sign-Up / Login Screen -->
+    <div id="auth-screen" class="fixed inset-0 bg-dark-900 z-40 flex items-center justify-center p-4">
+        <div class="bg-dark-800 border border-dark-700 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl relative">
+            <!-- Quick Admin Icon on Login Screen -->
+            <button onclick="openAdminModal()" class="absolute top-5 right-5 p-2 rounded-xl bg-dark-700/60 hover:bg-dark-700 text-gray-400 hover:text-white transition" title="Admin Panel">
+                <i data-lucide="shield" class="w-4 h-4"></i>
+            </button>
+
+            <div class="flex flex-col items-center text-center mb-6">
+                <div id="auth-logo-box" class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-brand-600 to-purple-500 flex items-center justify-center shadow-lg mb-4">
+                    <i data-lucide="phone-call" class="w-8 h-8 text-white"></i>
+                </div>
+                <h1 class="app-title-display text-2xl font-bold tracking-tight text-white">I R CALLING</h1>
+                <p class="app-tagline-display text-xs text-gray-400 mt-1">Global Calling with Live AI Voice Translation</p>
+            </div>
+
+            <!-- Step 1: Enter Mobile Number -->
+            <div id="auth-step-phone" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-400 mb-1.5">Aapka Naam</label>
+                    <input id="signup-name" type="text" placeholder="Apna naam likhein..." class="w-full bg-dark-900 border border-dark-600 focus:border-brand-500 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-400 mb-1.5">Mobile Number</label>
+                    <div class="flex gap-2">
+                        <select id="country-code" class="bg-dark-900 border border-dark-600 rounded-xl px-3 py-3 text-sm text-white focus:outline-none">
+                            <option value="+91">🇮🇳 +91</option>
+                            <option value="+966">🇸🇦 +966</option>
+                            <option value="+971">🇦🇪 +971</option>
+                            <option value="+1">🇺🇸 +1</option>
+                            <option value="+44">🇬🇧 +44</option>
+                            <option value="+92">🇵🇰 +92</option>
+                        </select>
+                        <input id="signup-phone" type="tel" placeholder="9876543210" class="w-full bg-dark-900 border border-dark-600 focus:border-brand-500 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none">
+                    </div>
+                </div>
+                <button onclick="sendOTP()" class="theme-primary-btn w-full py-3.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-sm transition shadow-lg">
+                    Get OTP & Continue
+                </button>
+            </div>
+
+            <!-- Step 2: Verify OTP -->
+            <div id="auth-step-otp" class="hidden space-y-4">
+                <div class="p-3 rounded-xl bg-brand-500/10 border border-brand-500/20 text-center">
+                    <p class="text-xs text-gray-300">OTP bheja gaya hai: <span id="display-phone" class="font-semibold text-white"></span></p>
+                    <p class="text-[11px] text-amber-400 mt-1">OTP: <span id="hint-otp-display" class="font-mono font-bold">1234</span></p>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-400 mb-1.5">4-Digit OTP Enter Karein</label>
+                    <input id="otp-input" type="text" maxlength="4" placeholder="1234" class="w-full text-center tracking-[0.5em] font-mono text-lg bg-dark-900 border border-dark-600 focus:border-brand-500 rounded-xl px-4 py-3 text-white focus:outline-none">
+                </div>
+                <button onclick="verifyOTP()" class="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm transition shadow-lg">
+                    Verify & Start Calling
+                </button>
+                <button onclick="backToPhone()" class="w-full text-xs text-gray-400 hover:text-white py-1">
+                    ← Mobile Number Badlein
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Navigation Bar -->
+    <header class="border-b border-dark-700 bg-dark-800/90 backdrop-blur-md sticky top-0 z-30">
+        <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+                <div id="header-logo-box" class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-purple-500 flex items-center justify-center shadow-lg">
+                    <i data-lucide="phone-call" class="w-5 h-5 text-white"></i>
+                </div>
+                <div>
+                    <h1 class="app-title-display font-bold text-base sm:text-lg tracking-tight text-white">I R CALLING</h1>
+                    <p id="header-user-info" class="text-[11px] text-gray-400 truncate max-w-[140px] sm:max-w-xs">Ready</p>
+                </div>
+            </div>
+
+            <!-- Live Network Status, Admin Panel & Logout -->
+            <div class="flex items-center gap-2">
+                <div id="status-badge" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-dark-700 border border-dark-600 text-[11px] font-medium">
+                    <span id="status-dot" class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span id="status-text" class="text-gray-200">Online</span>
+                </div>
+                <button onclick="openAdminModal()" class="px-2.5 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-medium flex items-center gap-1 transition" title="Admin Panel">
+                    <i data-lucide="shield-check" class="w-4 h-4"></i>
+                    <span class="hidden sm:inline">Admin</span>
+                </button>
+                <button onclick="logoutUser()" class="p-2 rounded-xl bg-dark-700 hover:bg-red-600/80 text-gray-300 hover:text-white transition" title="Logout">
+                    <i data-lucide="log-out" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Desktop Section Switcher Bar (Clean Tabs so everything looks organized) -->
+    <div class="max-w-6xl w-full mx-auto px-4 pt-4">
+        <div class="grid grid-cols-4 gap-2 bg-dark-800 p-1.5 rounded-2xl border border-dark-700">
+            <button onclick="switchAppTab('dialer')" id="tab-btn-dialer" class="tab-nav-btn py-2.5 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 bg-brand-600 text-white transition">
+                <i data-lucide="grid" class="w-4 h-4"></i> <span>Dialer</span>
+            </button>
+            <button onclick="switchAppTab('call')" id="tab-btn-call" class="tab-nav-btn py-2.5 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 text-gray-400 hover:text-white transition">
+                <i data-lucide="video" class="w-4 h-4"></i> <span>Call Screen</span>
+            </button>
+            <button onclick="switchAppTab('translator')" id="tab-btn-translator" class="tab-nav-btn py-2.5 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 text-gray-400 hover:text-white transition">
+                <i data-lucide="languages" class="w-4 h-4"></i> <span>AI Voice</span>
+            </button>
+            <button onclick="switchAppTab('history')" id="tab-btn-history" class="tab-nav-btn py-2.5 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 text-gray-400 hover:text-white transition">
+                <i data-lucide="history" class="w-4 h-4"></i> <span>Logs</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content Area (4 Clean Separate Sections) -->
+    <main class="flex-1 max-w-6xl w-full mx-auto px-4 py-4">
+
+        <!-- ========================================== -->
+        <!-- SECTION 1: NUMBER DIALER & KEYPAD          -->
+        <!-- ========================================== -->
+        <section id="section-dialer" class="app-section max-w-md mx-auto space-y-4">
+            <!-- Registered Number Card -->
+            <div class="bg-dark-800 border border-dark-700 rounded-2xl p-4 flex items-center justify-between shadow-lg">
+                <div>
+                    <span class="text-[11px] uppercase tracking-wider text-gray-400">Aapka Calling Number</span>
+                    <input id="my-peer-id" type="text" readonly value="Not Logged In" class="block bg-transparent text-sm font-mono font-bold text-emerald-400 focus:outline-none mt-0.5">
+                </div>
+                <button onclick="copyMyId()" class="px-3 py-2 rounded-xl bg-dark-700 hover:bg-dark-600 text-xs font-medium text-gray-200 flex items-center gap-1.5 transition">
+                    <i data-lucide="copy" class="w-3.5 h-3.5"></i> Copy
+                </button>
+            </div>
+
+            <!-- Number Input & Keypad -->
+            <div class="bg-dark-800 border border-dark-700 rounded-3xl p-5 shadow-xl space-y-4">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-sm font-semibold text-white">Number Milayein (Dialer)</h2>
+                    <span class="text-[11px] text-gray-400">Country code ke saath</span>
+                </div>
+
+                <div class="relative flex items-center">
+                    <input id="remote-peer-id" type="tel" placeholder="+919876543210" class="w-full bg-dark-900 border border-dark-600 focus:border-brand-500 rounded-2xl px-4 py-3.5 text-lg font-mono tracking-wider text-white placeholder-gray-600 focus:outline-none">
+                    <button onclick="backspaceDialer()" class="absolute right-3 p-2 rounded-xl bg-dark-800 hover:bg-dark-700 text-gray-400 hover:text-white" title="Delete">
+                        <i data-lucide="delete" class="w-5 h-5"></i>
+                    </button>
+                </div>
+
+                <!-- Touch Keypad -->
+                <div class="grid grid-cols-3 gap-2.5 text-center">
+                    <button onclick="appendDialer('1')" class="py-3 rounded-2xl bg-dark-900 hover:bg-dark-700 border border-dark-700 text-lg font-bold text-white transition">1</button>
+                    <button onclick="appendDialer('2')" class="py-3 rounded-2xl bg-dark-900 hover:bg-dark-700 border border-dark-700 text-lg font-bold text-white transition">2</button>
+                    <button onclick="appendDialer('3')" class="py-3 rounded-2xl bg-dark-900 hover:bg-dark-700 border border-dark-700 text-lg font-bold text-white transition">3</button>
+                    <button onclick="appendDialer('4')" class="py-3 rounded-2xl bg-dark-900 hover:bg-dark-700 border border-dark-700 text-lg font-bold text-white transition">4</button>
+                    <button onclick="appendDialer('5')" class="py-3 rounded-2xl bg-dark-900 hover:bg-dark-700 border border-dark-700 text-lg font-bold text-white transition">5</button>
+                    <button onclick="appendDialer('6')" class="py-3 rounded-2xl bg-dark-900 hover:bg-dark-700 border border-dark-700 text-lg font-bold text-white transition">6</button>
+                    <button onclick="appendDialer('7')" class="py-3 rounded-2xl bg-dark-900 hover:bg-dark-700 border border-dark-700 text-lg font-bold text-white transition">7</button>
+                    <button onclick="appendDialer('8')" class="py-3 rounded-2xl bg-dark-900 hover:bg-dark-700 border border-dark-700 text-lg font-bold text-white transition">8</button>
+                    <button onclick="appendDialer('9')" class="py-3 rounded-2xl bg-dark-900 hover:bg-dark-700 border border-dark-700 text-lg font-bold text-white transition">9</button>
+                    <button onclick="appendDialer('+')" class="py-3 rounded-2xl bg-dark-900 hover:bg-dark-700 border border-dark-700 text-lg font-bold text-brand-400 transition">+</button>
+                    <button onclick="appendDialer('0')" class="py-3 rounded-2xl bg-dark-900 hover:bg-dark-700 border border-dark-700 text-lg font-bold text-white transition">0</button>
+                    <button onclick="clearDialer()" class="py-3 rounded-2xl bg-dark-900 hover:bg-red-900/40 border border-dark-700 text-xs font-semibold text-red-400 transition">Clear</button>
+                </div>
+
+                <!-- Call Action Buttons -->
+                <div class="grid grid-cols-2 gap-3 pt-1">
+                    <button id="btn-video-call-dialer" onclick="startCall(true)" class="theme-primary-btn py-3.5 px-4 rounded-2xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-sm flex items-center justify-center gap-2 transition shadow-lg">
+                        <i data-lucide="video" class="w-4 h-4"></i> Video Call
+                    </button>
+                    <button onclick="startCall(false)" class="py-3.5 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm flex items-center justify-center gap-2 transition shadow-lg">
+                        <i data-lucide="phone" class="w-4 h-4"></i> Audio Call
+                    </button>
+                </div>
+
+                <!-- Solo Test Button -->
+                <button onclick="startDemoCall()" class="w-full py-2.5 px-4 rounded-xl bg-dark-900 hover:bg-dark-700 border border-dark-600 text-gray-300 text-xs font-medium flex items-center justify-center gap-2 transition">
+                    <i data-lucide="sparkles" class="w-4 h-4 text-amber-400"></i> Test Call & AI Translator Alone
+                </button>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- SECTION 2: LIVE VIDEO & AUDIO CALL STAGE   -->
+        <!-- ========================================== -->
+        <section id="section-call" class="app-section hidden max-w-4xl mx-auto space-y-4">
+            <!-- Video Canvas Container -->
+            <div class="relative w-full aspect-[4/3] sm:aspect-video bg-dark-800 rounded-3xl border border-dark-700 overflow-hidden shadow-2xl flex items-center justify-center">
+                
+                <!-- Remote Video -->
+                <video id="remote-video" autoplay playsinline class="w-full h-full object-cover hidden"></video>
+
+                <!-- Placeholder when no remote call is active -->
+                <div id="remote-placeholder" class="flex flex-col items-center justify-center text-center p-6">
+                    <div class="w-16 h-16 rounded-full bg-dark-700 border border-dark-600 flex items-center justify-center mb-3">
+                        <i data-lucide="phone-call" class="w-7 h-7 text-brand-500"></i>
+                    </div>
+                    <h3 class="text-base sm:text-lg font-semibold text-gray-200">No Active Call</h3>
+                    <p class="text-xs text-gray-400 max-w-xs mt-1">Call lagane ke liye Dialer tab par jaayein ya Test Call chalayein.</p>
+                    <button onclick="switchAppTab('dialer')" class="mt-4 px-4 py-2 rounded-xl bg-brand-600 text-white text-xs font-semibold">
+                        Open Dialer
+                    </button>
+                </div>
+
+                <!-- Live AI Translation Subtitle Overlay -->
+                <div id="translation-subtitle-box" class="hidden absolute bottom-20 left-3 right-3 sm:left-6 sm:right-48 z-20 bg-black/80 backdrop-blur-md border border-brand-500/40 rounded-2xl p-3 shadow-xl">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-[10px] font-semibold uppercase tracking-wider text-brand-400 flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-brand-500 animate-ping"></span> AI Translator
+                        </span>
+                        <span id="active-lang-badge" class="text-[10px] bg-dark-700 px-2 py-0.5 rounded text-gray-300">Hindi → Arabic</span>
+                    </div>
+                    <p id="original-speech-text" class="text-[11px] text-gray-400 italic truncate">Boliye... (Listening)</p>
+                    <p id="translated-speech-text" class="text-xs sm:text-sm font-semibold text-white mt-0.5">Translated voice output...</p>
+                </div>
+
+                <!-- Calling / Ringing Overlay -->
+                <div id="calling-overlay" class="hidden absolute inset-0 bg-dark-900/90 backdrop-blur-md flex flex-col items-center justify-center z-20">
+                    <div class="w-20 h-20 rounded-full bg-brand-600/20 border border-brand-500 flex items-center justify-center mb-4 animate-bounce">
+                        <i data-lucide="phone-outgoing" class="w-8 h-8 text-brand-400"></i>
+                    </div>
+                    <h3 id="calling-target-text" class="text-lg font-semibold text-white">Calling...</h3>
+                    <p class="text-xs text-gray-400 mt-1">Stable WebRTC Connection Active...</p>
+                </div>
+
+                <!-- Active Call Timer & Peer Info Badge -->
+                <div id="call-info-overlay" class="hidden absolute top-3 left-3 bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-2 z-10">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                    <span id="connected-peer-name" class="text-xs font-medium text-white">Connected</span>
+                    <span class="text-gray-500">|</span>
+                    <span id="call-timer" class="text-xs font-mono text-gray-200">00:00</span>
+                </div>
+
+                <!-- Local Video Picture-in-Picture (PiP) -->
+                <div class="absolute bottom-3 right-3 w-24 sm:w-40 aspect-video bg-dark-900 rounded-xl border-2 border-dark-600 overflow-hidden shadow-xl z-10">
+                    <video id="local-video" autoplay muted playsinline class="w-full h-full object-cover mirror"></video>
+                    <div id="local-cam-off" class="hidden absolute inset-0 bg-dark-800 flex flex-col items-center justify-center">
+                        <i data-lucide="video-off" class="w-4 h-4 text-gray-400"></i>
+                        <span class="text-[9px] text-gray-400 mt-0.5">Cam Off</span>
+                    </div>
+                    <span class="absolute top-1 left-1 text-[8px] font-medium bg-black/75 px-1.5 py-0.5 rounded text-gray-200">You</span>
+                </div>
+            </div>
+
+            <!-- Bottom Call Controls Bar -->
+            <div class="bg-dark-800 border border-dark-700 rounded-2xl p-3.5 flex flex-wrap items-center justify-center gap-3 sm:gap-4 shadow-lg">
+                <button id="btn-mic" onclick="toggleMic()" class="p-3.5 rounded-full bg-dark-700 hover:bg-dark-600 text-white transition" title="Mute / Unmute">
+                    <i id="icon-mic" data-lucide="mic" class="w-5 h-5"></i>
+                </button>
+
+                <button id="btn-cam" onclick="toggleCamera()" class="p-3.5 rounded-full bg-dark-700 hover:bg-dark-600 text-white transition" title="Camera On/Off">
+                    <i id="icon-cam" data-lucide="video" class="w-5 h-5"></i>
+                </button>
+
+                <button id="btn-translator" onclick="toggleLiveTranslator()" class="px-4 py-3 rounded-full bg-dark-700 hover:bg-dark-600 border border-brand-500/40 text-white transition flex items-center gap-2">
+                    <i data-lucide="languages" class="w-4 h-4 text-brand-400"></i>
+                    <span id="translator-btn-text" class="text-xs font-medium">AI Translate: OFF</span>
+                </button>
+
+                <button id="btn-screen" onclick="toggleScreenShare()" class="p-3.5 rounded-full bg-dark-700 hover:bg-dark-600 text-white transition" title="Share Screen">
+                    <i data-lucide="monitor-up" class="w-5 h-5"></i>
+                </button>
+
+                <button id="btn-end-call" onclick="endCall()" disabled class="px-5 py-3 rounded-full bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-xs flex items-center gap-1.5 shadow-lg">
+                    <i data-lucide="phone-off" class="w-4 h-4"></i> End Call
+                </button>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- SECTION 3: AI VOICE TRANSLATOR STUDIO      -->
+        <!-- ========================================== -->
+        <section id="section-translator" class="app-section hidden max-w-md mx-auto space-y-4">
+            <div id="translator-sidebar-card" class="bg-dark-800 border border-brand-500/30 rounded-3xl p-5 shadow-xl space-y-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <div class="w-9 h-9 rounded-xl bg-brand-500/20 flex items-center justify-center">
+                            <i data-lucide="sparkles" class="w-5 h-5 text-brand-400"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-sm font-bold text-white">AI Live Voice Translator</h2>
+                            <p class="text-[11px] text-gray-400">Bol kar ya likh kar dusri bhasha mein sunayein</p>
+                        </div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="translator-toggle-switch" onchange="toggleLiveTranslator()" class="sr-only peer">
+                        <div class="w-10 h-5 bg-dark-600 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-600"></div>
+                    </label>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[11px] text-gray-400 mb-1">Main Bolunga (My Lang)</label>
+                        <select id="source-lang" onchange="updateLanguageLabels()" class="w-full bg-dark-900 border border-dark-600 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none">
+                            <option value="hi-IN" selected>Hindi (हिंदी)</option>
+                            <option value="ur-PK">Urdu (اردو)</option>
+                            <option value="en-US">English</option>
+                            <option value="ar-SA">Arabic (العربية)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] text-gray-400 mb-1">Samne Wale Ko Sunai De</label>
+                        <select id="target-lang" onchange="updateLanguageLabels()" class="w-full bg-dark-900 border border-dark-600 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none">
+                            <option value="Arabic" selected>Arabic (العربية)</option>
+                            <option value="English">English</option>
+                            <option value="Hindi">Hindi (हिंदी)</option>
+                            <option value="Spanish">Spanish</option>
+                            <option value="French">French</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Quick Test Translator Input -->
+                <div class="pt-2 border-t border-dark-700 space-y-2">
+                    <label class="block text-[11px] text-gray-400">Text Likh Kar Voice Test Karein:</label>
+                    <div class="flex gap-2">
+                        <input id="manual-translate-input" type="text" placeholder="Jaise: Aap kaise hain?" class="w-full bg-dark-900 border border-dark-600 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none">
+                        <button onclick="manualTestTranslate()" class="theme-primary-btn px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold flex-shrink-0">
+                            Speak
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Live Output Preview Box inside Translator Tab -->
+                <div class="p-3.5 rounded-2xl bg-dark-900 border border-dark-700 space-y-1">
+                    <span class="text-[10px] uppercase tracking-wider text-brand-400 font-semibold">Last Translated Output</span>
+                    <p id="tab-translated-output" class="text-sm text-white font-medium">Yahan translation dikhega aur awaaz niklegi...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- SECTION 4: RECENT CALL HISTORY             -->
+        <!-- ========================================== -->
+        <section id="section-history" class="app-section hidden max-w-md mx-auto">
+            <div class="bg-dark-800 border border-dark-700 rounded-3xl p-5 shadow-xl">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h2 class="text-sm font-bold text-white">Recent Call Logs</h2>
+                        <p class="text-[11px] text-gray-400">Ek click mein dobara call lagayein</p>
+                    </div>
+                    <button onclick="clearHistory()" class="px-3 py-1.5 rounded-xl bg-dark-700 hover:bg-red-600/30 text-xs text-gray-300 hover:text-red-300 transition">Clear All</button>
+                </div>
+                <div id="call-history-list" class="space-y-2.5 max-h-96 overflow-y-auto pr-1">
+                    <p class="text-xs text-gray-500 text-center py-8">Abhi tak koi call history nahi hai.</p>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Incoming Call Modal -->
+    <div id="incoming-call-modal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-dark-800 border border-dark-600 rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div class="w-20 h-20 rounded-full bg-emerald-500/20 border border-emerald-500 flex items-center justify-center mx-auto mb-4 animate-pulse">
+                <i data-lucide="phone-incoming" class="w-9 h-9 text-emerald-400"></i>
+            </div>
+            <h3 class="text-xl font-bold text-white">Incoming Call</h3>
+            <p id="incoming-caller-id" class="text-sm text-gray-400 mt-1 mb-6 font-mono">Number: Unknown</p>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <button onclick="rejectIncomingCall()" class="py-3 px-4 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-medium flex items-center justify-center gap-2 transition">
+                    <i data-lucide="phone-off" class="w-5 h-5"></i> Decline
+                </button>
+                <button onclick="acceptIncomingCall()" class="py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium flex items-center justify-center gap-2 transition shadow-lg">
+                    <i data-lucide="phone" class="w-5 h-5"></i> Accept
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- SECRET ADMIN PANEL MODAL                   -->
+    <!-- ========================================== -->
+    <div id="admin-modal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-dark-800 border border-dark-600 rounded-3xl max-w-xl w-full shadow-2xl overflow-hidden my-8">
+            
+            <!-- Modal Header -->
+            <div class="px-6 py-4 bg-dark-900 border-b border-dark-700 flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center">
+                        <i data-lucide="shield-check" class="w-4 h-4 text-amber-400"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-white">Admin Control Panel</h3>
+                        <p class="text-[11px] text-gray-400">App ka naam, PIN, color aur features badlein</p>
+                    </div>
+                </div>
+                <button onclick="closeAdminModal()" class="p-2 rounded-xl bg-dark-800 hover:bg-dark-700 text-gray-400 hover:text-white">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <!-- Admin Password Lock Screen -->
+            <div id="admin-login-box" class="p-6 sm:p-8 text-center space-y-4">
+                <div class="w-14 h-14 rounded-2xl bg-dark-700 flex items-center justify-center mx-auto">
+                    <i data-lucide="lock" class="w-7 h-7 text-amber-400"></i>
+                </div>
+                <h4 class="text-lg font-semibold text-white">Admin PIN Enter Karein</h4>
+                <p class="text-xs text-gray-400">Default PIN: <span class="font-mono text-amber-400 font-bold">admin123</span></p>
+                <input id="admin-pin-input" type="password" placeholder="Enter PIN..." class="max-w-xs mx-auto w-full text-center bg-dark-900 border border-dark-600 focus:border-amber-500 rounded-xl px-4 py-3 text-sm text-white focus:outline-none">
+                <div>
+                    <button onclick="unlockAdminPanel()" class="px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-dark-900 font-bold text-sm transition">
+                        Unlock Dashboard
+                    </button>
+                </div>
+            </div>
+
+            <!-- Admin Dashboard Controls (Unlocked) -->
+            <div id="admin-dashboard-box" class="hidden p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+                
+                <!-- Live Stats Cards -->
+                <div class="grid grid-cols-3 gap-3">
+                    <div class="bg-dark-900 border border-dark-700 rounded-2xl p-3 text-center">
+                        <p class="text-[11px] text-gray-400">Network</p>
+                        <p class="text-sm font-bold text-emerald-400 mt-0.5">Stable ✓</p>
+                    </div>
+                    <div class="bg-dark-900 border border-dark-700 rounded-2xl p-3 text-center">
+                        <p class="text-[11px] text-gray-400">Total Calls</p>
+                        <p id="admin-stat-calls" class="text-sm font-bold text-white mt-0.5">0</p>
+                    </div>
+                    <div class="bg-dark-900 border border-dark-700 rounded-2xl p-3 text-center">
+                        <p class="text-[11px] text-gray-400">AI Engine</p>
+                        <p class="text-sm font-bold text-brand-400 mt-0.5">Active</p>
+                    </div>
+                </div>
+
+                <!-- 1. App Branding & Security Settings -->
+                <div class="bg-dark-900 border border-dark-700 rounded-2xl p-4 space-y-3">
+                    <h4 class="text-xs font-semibold uppercase tracking-wider text-amber-400">1. App Branding & Security</h4>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-[11px] text-gray-400 mb-1">App ka Naam</label>
+                            <input id="admin-app-name" type="text" value="I R CALLING" class="w-full bg-dark-800 border border-dark-600 rounded-xl px-3 py-2 text-xs text-white focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] text-gray-400 mb-1">Login OTP Code</label>
+                            <input id="admin-custom-otp" type="text" maxlength="4" value="1234" class="w-full bg-dark-800 border border-dark-600 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-[11px] text-gray-400 mb-1">App Tagline</label>
+                            <input id="admin-app-tagline" type="text" value="Global Calling with Live AI Voice Translation" class="w-full bg-dark-800 border border-dark-600 rounded-xl px-3 py-2 text-xs text-white focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] text-gray-400 mb-1">Admin PIN Badlein</label>
+                            <input id="admin-new-pin" type="text" value="admin123" class="w-full bg-dark-800 border border-dark-600 rounded-xl px-3 py-2 text-xs font-mono text-amber-300 focus:outline-none">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Theme Color Picker -->
+                <div class="bg-dark-900 border border-dark-700 rounded-2xl p-4 space-y-3">
+                    <h4 class="text-xs font-semibold uppercase tracking-wider text-amber-400">2. App Theme Color Badlein</h4>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="selectAdminTheme('indigo')" class="px-3 py-2 rounded-xl bg-indigo-600 text-white text-xs font-medium">Indigo</button>
+                        <button onclick="selectAdminTheme('emerald')" class="px-3 py-2 rounded-xl bg-emerald-600 text-white text-xs font-medium">Emerald Green</button>
+                        <button onclick="selectAdminTheme('rose')" class="px-3 py-2 rounded-xl bg-rose-600 text-white text-xs font-medium">Royal Rose</button>
+                        <button onclick="selectAdminTheme('amber')" class="px-3 py-2 rounded-xl bg-amber-600 text-white text-xs font-medium">Gold / Amber</button>
+                    </div>
+                </div>
+
+                <!-- 3. Feature Toggles -->
+                <div class="bg-dark-900 border border-dark-700 rounded-2xl p-4 space-y-3">
+                    <h4 class="text-xs font-semibold uppercase tracking-wider text-amber-400">3. App Features On / Off Karein</h4>
+                    
+                    <div class="flex items-center justify-between py-1">
+                        <div>
+                            <p class="text-xs font-medium text-white">AI Voice Translator Feature</p>
+                            <p class="text-[11px] text-gray-400">Hindi to Arabic/English live translation</p>
+                        </div>
+                        <input id="admin-toggle-ai" type="checkbox" checked class="w-4 h-4 accent-amber-500">
+                    </div>
+
+                    <div class="flex items-center justify-between py-1 border-t border-dark-800">
+                        <div>
+                            <p class="text-xs font-medium text-white">Video Calling Option</p>
+                            <p class="text-[11px] text-gray-400">Video call button dikhayein ya hide karein</p>
+                        </div>
+                        <input id="admin-toggle-video" type="checkbox" checked class="w-4 h-4 accent-amber-500">
+                    </div>
+
+                    <div class="flex items-center justify-between py-1 border-t border-dark-800">
+                        <div>
+                            <p class="text-xs font-medium text-red-400">Maintenance Mode</p>
+                            <p class="text-[11px] text-gray-400">App ko temporary lock karne ke liye</p>
+                        </div>
+                        <input id="admin-toggle-maintenance" type="checkbox" class="w-4 h-4 accent-red-500">
+                    </div>
+                </div>
+
+                <!-- 4. Notice Banner -->
+                <div class="bg-dark-900 border border-dark-700 rounded-2xl p-4 space-y-2">
+                    <h4 class="text-xs font-semibold uppercase tracking-wider text-amber-400">4. Top Notice Banner</h4>
+                    <input id="admin-banner-input" type="text" placeholder="Khali chhodenge toh banner nahi dikhega..." class="w-full bg-dark-800 border border-dark-600 rounded-xl px-3 py-2 text-xs text-white focus:outline-none">
+                </div>
+
+                <!-- Save & Reset Actions -->
+                <div class="flex items-center justify-between gap-3 pt-2">
+                    <button onclick="resetAdminConfig()" class="px-4 py-2.5 rounded-xl bg-dark-700 hover:bg-dark-600 text-xs text-gray-300">
+                        Reset Default
+                    </button>
+                    <button onclick="saveAdminConfig()" class="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm transition shadow-lg">
+                        Save & Apply Changes ✓
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Logic -->
+    <script>
+        lucide.createIcons();
+
+        // Default Admin Configuration
+        const defaultAdminConfig = {
+            appName: 'I R CALLING',
+            tagline: 'Global Calling with Live AI Voice Translation',
+            otp: '1234',
+            adminPin: 'admin123',
+            theme: 'indigo',
+            enableAI: true,
+            enableVideo: true,
+            maintenance: false,
+            bannerText: ''
+        };
+
+        let adminConfig = JSON.parse(localStorage.getItem('ir_admin_config')) || { ...defaultAdminConfig };
+        let totalCallsCount = parseInt(localStorage.getItem('ir_total_calls') || '0', 10);
+
+        let peer = null;
+        let heartbeatInterval = null;
+        let localStream = null;
+        let currentCall = null;
+        let incomingCallObj = null;
+        let dataConnection = null;
+        let isMicMuted = false;
+        let isCamOff = false;
+        let isScreenSharing = false;
+        let isTranslatorActive = false;
+        let recognition = null;
+        let callTimerInterval = null;
+        let callSeconds = 0;
+        let currentUser = null;
+
+        const localVideo = document.getElementById('local-video');
+        const remoteVideo = document.getElementById('remote-video');
+        const remotePlaceholder = document.getElementById('remote-placeholder');
+        const callingOverlay = document.getElementById('calling-overlay');
+        const callInfoOverlay = document.getElementById('call-info-overlay');
+        const myPeerIdInput = document.getElementById('my-peer-id');
+        const remotePeerIdInput = document.getElementById('remote-peer-id');
+        const btnEndCall = document.getElementById('btn-end-call');
+        const incomingModal = document.getElementById('incoming-call-modal');
+
+        // ==========================================
+        // CLEAN TABBED NAVIGATION SYSTEM
+        // ==========================================
+        function switchAppTab(tabName) {
+            document.querySelectorAll('.app-section').forEach(sec => sec.classList.add('hidden'));
+            const activeSec = document.getElementById(`section-${tabName}`);
+            if (activeSec) activeSec.classList.remove('hidden');
+
+            document.querySelectorAll('.tab-nav-btn').forEach(btn => {
+                btn.classList.remove('bg-brand-600', 'text-white');
+                btn.classList.add('text-gray-400');
+            });
+            const activeBtn = document.getElementById(`tab-btn-${tabName}`);
+            if (activeBtn) {
+                activeBtn.classList.add('bg-brand-600', 'text-white');
+                activeBtn.classList.remove('text-gray-400');
+            }
+        }
+
+        // Dialer Keypad Helpers
+        function appendDialer(val) {
+            remotePeerIdInput.value += val;
+        }
+        function backspaceDialer() {
+            remotePeerIdInput.value = remotePeerIdInput.value.slice(0, -1);
+        }
+        function clearDialer() {
+            remotePeerIdInput.value = '';
+        }
+
+        // ==========================================
+        // ADMIN PANEL FUNCTIONS
+        // ==========================================
+        function applyAdminConfigToUI() {
+            document.title = `${adminConfig.appName} - Live Calling`;
+            document.querySelectorAll('.app-title-display').forEach(el => el.textContent = adminConfig.appName);
+            document.querySelectorAll('.app-tagline-display').forEach(el => el.textContent = adminConfig.tagline);
+            document.getElementById('hint-otp-display').textContent = adminConfig.otp;
+
+            const bannerBar = document.getElementById('admin-announcement-bar');
+            if (adminConfig.bannerText && adminConfig.bannerText.trim() !== '') {
+                document.getElementById('admin-announcement-text').textContent = adminConfig.bannerText;
+                bannerBar.classList.remove('hidden');
+            } else {
+                bannerBar.classList.add('hidden');
+            }
+
+            const maintScreen = document.getElementById('maintenance-screen');
+            if (adminConfig.maintenance) {
+                maintScreen.classList.remove('hidden');
+            } else {
+                maintScreen.classList.add('hidden');
+            }
+
+            const aiTabBtn = document.getElementById('tab-btn-translator');
+            const aiBtn = document.getElementById('btn-translator');
+            if (adminConfig.enableAI) {
+                aiTabBtn.classList.remove('hidden');
+                aiBtn.classList.remove('hidden');
+            } else {
+                aiTabBtn.classList.add('hidden');
+                aiBtn.classList.add('hidden');
+                if (isTranslatorActive) toggleLiveTranslator();
+            }
+
+            const vidBtn = document.getElementById('btn-video-call-dialer');
+            if (adminConfig.enableVideo) {
+                vidBtn.classList.remove('hidden');
+            } else {
+                vidBtn.classList.add('hidden');
+            }
+
+            const themeMap = {
+                indigo: { gradient: 'from-indigo-600 to-purple-500', btn: 'bg-indigo-600 hover:bg-indigo-500' },
+                emerald: { gradient: 'from-emerald-600 to-teal-500', btn: 'bg-emerald-600 hover:bg-emerald-500' },
+                rose: { gradient: 'from-rose-600 to-pink-500', btn: 'bg-rose-600 hover:bg-rose-500' },
+                amber: { gradient: 'from-amber-600 to-orange-500', btn: 'bg-amber-600 hover:bg-amber-500' }
+            };
+            const selectedTheme = themeMap[adminConfig.theme] || themeMap.indigo;
+
+            ['auth-logo-box', 'header-logo-box'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.className = `w-10 h-10 rounded-xl bg-gradient-to-tr ${selectedTheme.gradient} flex items-center justify-center shadow-lg`;
+            });
+            document.getElementById('auth-logo-box').classList.replace('w-10', 'w-16');
+            document.getElementById('auth-logo-box').classList.replace('h-10', 'h-16');
+
+            document.querySelectorAll('.theme-primary-btn').forEach(btn => {
+                btn.className = btn.className.replace(/bg-(indigo|emerald|rose|amber)-600 hover:bg-(indigo|emerald|rose|amber)-500/g, '');
+                btn.classList.add(...selectedTheme.btn.split(' '));
+            });
+        }
+
+        function openAdminModal() {
+            document.getElementById('admin-modal').classList.remove('hidden');
+            document.getElementById('admin-pin-input').value = '';
+            document.getElementById('admin-login-box').classList.remove('hidden');
+            document.getElementById('admin-dashboard-box').classList.add('hidden');
+        }
+
+        function closeAdminModal() {
+            document.getElementById('admin-modal').classList.add('hidden');
+        }
+
+        function unlockAdminPanel() {
+            const pin = document.getElementById('admin-pin-input').value.trim();
+            const validPin = adminConfig.adminPin || 'admin123';
+            if (pin !== validPin) {
+                showToast('Galat Admin PIN!', 'error');
+                return;
+            }
+            document.getElementById('admin-login-box').classList.add('hidden');
+            document.getElementById('admin-dashboard-box').classList.remove('hidden');
+
+            document.getElementById('admin-app-name').value = adminConfig.appName;
+            document.getElementById('admin-app-tagline').value = adminConfig.tagline;
+            document.getElementById('admin-custom-otp').value = adminConfig.otp;
+            document.getElementById('admin-new-pin').value = validPin;
+            document.getElementById('admin-toggle-ai').checked = adminConfig.enableAI;
+            document.getElementById('admin-toggle-video').checked = adminConfig.enableVideo;
+            document.getElementById('admin-toggle-maintenance').checked = adminConfig.maintenance;
+            document.getElementById('admin-banner-input').value = adminConfig.bannerText || '';
+            document.getElementById('admin-stat-calls').textContent = totalCallsCount;
+        }
+
+        function selectAdminTheme(themeName) {
+            adminConfig.theme = themeName;
+            applyAdminConfigToUI();
+            showToast(`Theme changed to ${themeName.toUpperCase()}`, 'info');
+        }
+
+        function saveAdminConfig() {
+            adminConfig.appName = document.getElementById('admin-app-name').value.trim() || 'I R CALLING';
+            adminConfig.tagline = document.getElementById('admin-app-tagline').value.trim() || 'Global Calling with Live AI Voice Translation';
+            adminConfig.otp = document.getElementById('admin-custom-otp').value.trim() || '1234';
+            adminConfig.adminPin = document.getElementById('admin-new-pin').value.trim() || 'admin123';
+            adminConfig.enableAI = document.getElementById('admin-toggle-ai').checked;
+            adminConfig.enableVideo = document.getElementById('admin-toggle-video').checked;
+            adminConfig.maintenance = document.getElementById('admin-toggle-maintenance').checked;
+            adminConfig.bannerText = document.getElementById('admin-banner-input').value.trim();
+
+            localStorage.setItem('ir_admin_config', JSON.stringify(adminConfig));
+            applyAdminConfigToUI();
+            closeAdminModal();
+            showToast('Admin settings saved & applied!', 'success');
+        }
+
+        function resetAdminConfig() {
+            adminConfig = { ...defaultAdminConfig };
+            localStorage.setItem('ir_admin_config', JSON.stringify(adminConfig));
+            applyAdminConfigToUI();
+            closeAdminModal();
+            showToast('Settings reset to default.', 'info');
+        }
+
+        // ==========================================
+        // 0. Mobile Number Sign Up & OTP Auth
+        // ==========================================
+        function sendOTP() {
+            const name = document.getElementById('signup-name').value.trim();
+            const code = document.getElementById('country-code').value;
+            const phone = document.getElementById('signup-phone').value.trim().replace(/\D/g, '');
+
+            if (!name) {
+                showToast('Kripya apna naam enter karein.', 'error');
+                return;
+            }
+            if (phone.length < 7) {
+                showToast('Sahi mobile number enter karein.', 'error');
+                return;
+            }
+
+            const fullNumber = `${code}${phone}`;
+            document.getElementById('display-phone').textContent = fullNumber;
+            document.getElementById('auth-step-phone').classList.add('hidden');
+            document.getElementById('auth-step-otp').classList.remove('hidden');
+            showToast(`OTP ${fullNumber} par bhej diya gaya hai! (Use ${adminConfig.otp})`, 'success');
+        }
+
+        function backToPhone() {
+            document.getElementById('auth-step-otp').classList.add('hidden');
+            document.getElementById('auth-step-phone').classList.remove('hidden');
+        }
+
+        async function verifyOTP() {
+            const otp = document.getElementById('otp-input').value.trim();
+            if (otp !== adminConfig.otp) {
+                showToast(`Galat OTP! Kripya ${adminConfig.otp} daalein.`, 'error');
+                return;
+            }
+
+            const name = document.getElementById('signup-name').value.trim();
+            const code = document.getElementById('country-code').value;
+            const phone = document.getElementById('signup-phone').value.trim().replace(/\D/g, '');
+            const fullNumber = `${code}${phone}`;
+
+            currentUser = { name, phone: fullNumber };
+            localStorage.setItem('ir_calling_user', JSON.stringify(currentUser));
+
+            completeLogin();
+        }
+
+        async function completeLogin() {
+            document.getElementById('auth-screen').classList.add('hidden');
+            document.getElementById('header-user-info').textContent = `${currentUser.name} (${currentUser.phone})`;
+            myPeerIdInput.value = currentUser.phone;
+
+            await initMedia();
+            initPeer(currentUser.phone);
+            setupSpeechRecognition();
+            showToast(`Welcome to ${adminConfig.appName}, ${currentUser.name}!`, 'success');
+        }
+
+        function logoutUser() {
+            localStorage.removeItem('ir_calling_user');
+            if (heartbeatInterval) clearInterval(heartbeatInterval);
+            if (peer) peer.destroy();
+            location.reload();
+        }
+
+        // 1. Custom Toast Notification
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const colors = {
+                info: 'bg-dark-700 border-dark-600 text-gray-100',
+                success: 'bg-emerald-900/90 border-emerald-700 text-emerald-100',
+                error: 'bg-red-900/90 border-red-700 text-red-100'
+            };
+            toast.className = `px-4 py-3 rounded-xl border shadow-lg text-xs sm:text-sm font-medium backdrop-blur-md transition-all duration-300 ${colors[type]}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // 2. Initialize Local Camera & Microphone
+        async function initMedia() {
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                localVideo.srcObject = localStream;
+            } catch (err) {
+                console.warn('Camera/Mic access denied or unavailable, creating fallback stream:', err);
+                const canvas = document.createElement('canvas');
+                canvas.width = 640;
+                canvas.height = 360;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#1f2937';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#9ca3af';
+                ctx.font = '20px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('Camera Demo Mode', canvas.width / 2, canvas.height / 2);
+                localStream = canvas.captureStream(15);
+                localVideo.srcObject = localStream;
+            }
+        }
+
+        // 3. Anti-Disconnect PeerJS Initialization with Multi-ICE & Heartbeat
+        function initPeer(phoneId) {
+            const cleanPeerId = 'ir_' + phoneId.replace(/\+/g, '');
+            peer = new Peer(cleanPeerId, {
+                debug: 0,
+                pingInterval: 5000,
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' },
+                        { urls: 'stun:global.stun.twilio.com:3478' }
+                    ],
+                    iceCandidatePoolSize: 10
+                }
+            });
+
+            peer.on('open', () => {
+                myPeerIdInput.value = phoneId;
+                updateConnectionStatus(true);
+            });
+
+            // Keep connection alive & auto-heal silently if mobile network drops briefly
+            if (heartbeatInterval) clearInterval(heartbeatInterval);
+            heartbeatInterval = setInterval(() => {
+                if (peer && !peer.destroyed && peer.disconnected) {
+                    peer.reconnect();
+                }
+            }, 3000);
+
+            peer.on('disconnected', () => {
+                updateConnectionStatus(false);
+                setTimeout(() => {
+                    if (peer && !peer.destroyed) {
+                        peer.reconnect();
+                    }
+                }, 1000);
+            });
+
+            peer.on('call', (call) => {
+                incomingCallObj = call;
+                const displayCaller = call.peer.replace('ir_', '+');
+                document.getElementById('incoming-caller-id').textContent = `Mobile: ${displayCaller}`;
+                incomingModal.classList.remove('hidden');
+            });
+
+            peer.on('connection', (conn) => {
+                dataConnection = conn;
+                setupDataChannel(conn);
+            });
+
+            peer.on('error', (err) => {
+                if (err.type === 'peer-unavailable') {
+                    showToast('Samne wala user abhi online nahi hai.', 'error');
+                    resetCallUI();
+                } else if (err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error') {
+                    updateConnectionStatus(false);
+                    setTimeout(() => {
+                        if (peer && !peer.destroyed) peer.reconnect();
+                    }, 1500);
+                }
+            });
+        }
+
+        function setupDataChannel(conn) {
+            conn.on('data', (data) => {
+                if (data && data.type === 'translated_speech') {
+                    document.getElementById('translation-subtitle-box').classList.remove('hidden');
+                    document.getElementById('original-speech-text').textContent = `Caller (${data.targetLang}): "${data.original}"`;
+                    document.getElementById('translated-speech-text').textContent = data.translated;
+                    document.getElementById('tab-translated-output').textContent = data.translated;
+                    speakTranslatedAudio(data.translated, data.targetLang);
+                }
+            });
+        }
+
+        function updateConnectionStatus(isOnline) {
+            const dot = document.getElementById('status-dot');
+            const text = document.getElementById('status-text');
+            if (isOnline) {
+                dot.className = 'w-2 h-2 rounded-full bg-emerald-500';
+                text.textContent = 'Online';
+            } else {
+                dot.className = 'w-2 h-2 rounded-full bg-amber-400 animate-pulse';
+                text.textContent = 'Reconnecting...';
+            }
+        }
+
+        // 4. Start Outgoing Call (Automatically switches to Call Screen)
+        function startCall(withVideo = true) {
+            let targetRaw = remotePeerIdInput.value.trim().replace(/\s+/g, '');
+            if (!targetRaw) {
+                showToast('Pehle dost ka mobile number enter karein!', 'error');
+                return;
+            }
+            if (!targetRaw.startsWith('+')) {
+                targetRaw = '+91' + targetRaw;
+            }
+            if (targetRaw === myPeerIdInput.value) {
+                showToast('Khud ko test karne ke liye "Test Call & AI Translator Alone" dabayein.', 'info');
+                return;
+            }
+
+            if (peer && peer.disconnected) {
+                peer.reconnect();
+            }
+
+            const targetPeerId = 'ir_' + targetRaw.replace(/\+/g, '');
+
+            if (localStream && localStream.getVideoTracks().length > 0) {
+                localStream.getVideoTracks()[0].enabled = withVideo;
+                isCamOff = !withVideo;
+                updateMediaButtonsUI();
+            }
+
+            switchAppTab('call');
+            callingOverlay.classList.remove('hidden');
+            document.getElementById('calling-target-text').textContent = `Calling ${targetRaw}...`;
+
+            dataConnection = peer.connect(targetPeerId, { reliable: true });
+            setupDataChannel(dataConnection);
+
+            const call = peer.call(targetPeerId, localStream);
+            setupCallEvents(call, targetRaw, withVideo ? 'Video Call' : 'Audio Call');
+        }
+
+        // 5. Accept or Reject Incoming Call
+        function acceptIncomingCall() {
+            if (!incomingCallObj) return;
+            incomingModal.classList.add('hidden');
+            switchAppTab('call');
+            incomingCallObj.answer(localStream);
+            const callerDisplay = incomingCallObj.peer.replace('ir_', '+');
+            setupCallEvents(incomingCallObj, callerDisplay, 'Incoming Call');
+            incomingCallObj = null;
+        }
+
+        function rejectIncomingCall() {
+            if (incomingCallObj) {
+                incomingCallObj.close();
+                const callerDisplay = incomingCallObj.peer.replace('ir_', '+');
+                addCallHistory(callerDisplay, 'Missed / Declined', 'text-red-400');
+                incomingCallObj = null;
+            }
+            incomingModal.classList.add('hidden');
+        }
+
+        // 6. Setup Active Call Event Listeners with ICE Auto-Restart
+        function setupCallEvents(call, peerDisplayId, callType) {
+            currentCall = call;
+
+            if (call.peerConnection) {
+                call.peerConnection.oniceconnectionstatechange = () => {
+                    const state = call.peerConnection.iceConnectionState;
+                    if (state === 'disconnected') {
+                        showToast('Network weak hai, call recover ho rahi hai...', 'info');
+                        if (typeof call.peerConnection.restartIce === 'function') {
+                            call.peerConnection.restartIce();
+                        }
+                    }
+                };
+            }
+
+            call.on('stream', (remoteStream) => {
+                callingOverlay.classList.add('hidden');
+                remotePlaceholder.classList.add('hidden');
+                remoteVideo.classList.remove('hidden');
+                remoteVideo.srcObject = remoteStream;
+
+                callInfoOverlay.classList.remove('hidden');
+                document.getElementById('connected-peer-name').textContent = peerDisplayId;
+                btnEndCall.disabled = false;
+
+                startCallTimer();
+                addCallHistory(peerDisplayId, callType, 'text-emerald-400');
+                showToast('Call Connected!', 'success');
+            });
+
+            call.on('close', () => {
+                showToast('Call ended.', 'info');
+                resetCallUI();
+            });
+
+            call.on('error', (err) => {
+                console.error('Call error:', err);
+                showToast('Call connection failed.', 'error');
+                resetCallUI();
+            });
+        }
+
+        // 7. Self Loopback Demo Call
+        function startDemoCall() {
+            if (!localStream) {
+                showToast('Media stream ready nahi hai.', 'error');
+                return;
+            }
+            switchAppTab('call');
+            remotePlaceholder.classList.add('hidden');
+            remoteVideo.classList.remove('hidden');
+            remoteVideo.srcObject = localStream;
+            remoteVideo.muted = true;
+
+            callInfoOverlay.classList.remove('hidden');
+            document.getElementById('connected-peer-name').textContent = 'AI Translator Test Call';
+            btnEndCall.disabled = false;
+            currentCall = { isDemo: true };
+            startCallTimer();
+            addCallHistory('Self Translator Test', 'Demo Call', 'text-amber-400');
+
+            if (adminConfig.enableAI && !isTranslatorActive) {
+                toggleLiveTranslator();
+            }
+            showToast('Test call shuru! Hindi mein bolein, Arabic/English mein sunai dega.', 'success');
+        }
+
+        // 8. End Active Call
+        function endCall() {
+            if (currentCall) {
+                if (!currentCall.isDemo && typeof currentCall.close === 'function') {
+                    currentCall.close();
+                }
+                currentCall = null;
+            }
+            if (dataConnection) {
+                dataConnection.close();
+                dataConnection = null;
+            }
+            resetCallUI();
+            switchAppTab('dialer');
+        }
+
+        function resetCallUI() {
+            callingOverlay.classList.add('hidden');
+            callInfoOverlay.classList.add('hidden');
+            remoteVideo.classList.add('hidden');
+            remoteVideo.srcObject = null;
+            remotePlaceholder.classList.remove('hidden');
+            btnEndCall.disabled = true;
+            stopCallTimer();
+        }
+
+        // 9. Real-Time AI Voice Translation Engine
+        function setupSpeechRecognition() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) return;
+
+            recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = false;
+
+            recognition.onresult = async (event) => {
+                const lastIndex = event.results.length - 1;
+                const spokenText = event.results[lastIndex][0].transcript.trim();
+                if (!spokenText) return;
+
+                document.getElementById('original-speech-text').textContent = `You: "${spokenText}"`;
+                document.getElementById('translated-speech-text').textContent = 'Translating with AI...';
+
+                await translateAndBroadcast(spokenText);
+            };
+
+            recognition.onend = () => {
+                if (isTranslatorActive) {
+                    try { recognition.start(); } catch (err) {}
+                }
+            };
+        }
+
+        function toggleLiveTranslator() {
+            isTranslatorActive = !isTranslatorActive;
+            const toggleSwitch = document.getElementById('translator-toggle-switch');
+            const btn = document.getElementById('btn-translator');
+            const btnText = document.getElementById('translator-btn-text');
+            const subtitleBox = document.getElementById('translation-subtitle-box');
+
+            toggleSwitch.checked = isTranslatorActive;
+
+            if (isTranslatorActive) {
+                btn.classList.add('bg-brand-600', 'border-brand-400');
+                btn.classList.remove('bg-dark-700');
+                btnText.textContent = 'AI Translate: ON';
+                subtitleBox.classList.remove('hidden');
+                updateLanguageLabels();
+
+                if (recognition) {
+                    recognition.lang = document.getElementById('source-lang').value;
+                    try { recognition.start(); } catch (e) {}
+                }
+                showToast('Live AI Translation Chalu!', 'success');
+            } else {
+                btn.classList.remove('bg-brand-600', 'border-brand-400');
+                btn.classList.add('bg-dark-700');
+                btnText.textContent = 'AI Translate: OFF';
+                subtitleBox.classList.add('hidden');
+
+                if (recognition) {
+                    try { recognition.stop(); } catch (e) {}
+                }
+                showToast('Live AI Translation Band.', 'info');
+            }
+        }
+
+        function updateLanguageLabels() {
+            const srcSelect = document.getElementById('source-lang');
+            const tgtSelect = document.getElementById('target-lang');
+            const srcName = srcSelect.options[srcSelect.selectedIndex].text.split(' ')[0];
+            const tgtName = tgtSelect.value;
+            document.getElementById('active-lang-badge').textContent = `${srcName} → ${tgtName}`;
+
+            if (recognition && isTranslatorActive) {
+                recognition.lang = srcSelect.value;
+                try { recognition.stop(); } catch (e) {}
+            }
+        }
+
+        async function manualTestTranslate() {
+            const input = document.getElementById('manual-translate-input');
+            const text = input.value.trim();
+            if (!text) return;
+            input.value = '';
+
+            document.getElementById('translation-subtitle-box').classList.remove('hidden');
+            document.getElementById('original-speech-text').textContent = `You: "${text}"`;
+            document.getElementById('translated-speech-text').textContent = 'Translating...';
+            document.getElementById('tab-translated-output').textContent = 'Translating...';
+            await translateAndBroadcast(text);
+        }
+
+        async function translateAndBroadcast(text) {
+            const targetLang = document.getElementById('target-lang').value;
+            const sourceCode = document.getElementById('source-lang').value.split('-')[0];
+            const targetCodeMap = {
+                'Arabic': 'ar',
+                'English': 'en',
+                'Hindi': 'hi',
+                'Spanish': 'es',
+                'French': 'fr'
+            };
+            const targetCode = targetCodeMap[targetLang] || 'en';
+
+            try {
+                const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${sourceCode}|${targetCode}`;
+                const response = await fetch(url);
+                const result = await response.json();
+                const translatedText = result?.responseData?.translatedText || text;
+
+                document.getElementById('translated-speech-text').textContent = translatedText;
+                document.getElementById('tab-translated-output').textContent = translatedText;
+
+                if (dataConnection && dataConnection.open) {
+                    dataConnection.send({
+                        type: 'translated_speech',
+                        original: text,
+                        translated: translatedText,
+                        targetLang: targetLang
+                    });
+                }
+
+                speakTranslatedAudio(translatedText, targetLang);
+            } catch (err) {
+                document.getElementById('translated-speech-text').textContent = text;
+                document.getElementById('tab-translated-output').textContent = text;
+            }
+        }
+
+        function speakTranslatedAudio(text, targetLang) {
+            if (!('speechSynthesis' in window)) return;
+            window.speechSynthesis.cancel();
+
+            const utterance = new SpeechSynthesisUtterance(text);
+            const langMap = {
+                'Arabic': 'ar-SA',
+                'English': 'en-US',
+                'Hindi': 'hi-IN',
+                'Spanish': 'es-ES',
+                'French': 'fr-FR'
+            };
+            utterance.lang = langMap[targetLang] || 'en-US';
+            utterance.rate = 1.0;
+            window.speechSynthesis.speak(utterance);
+        }
+
+        // 10. Media Controls
+        function toggleMic() {
+            if (!localStream) return;
+            const audioTrack = localStream.getAudioTracks()[0];
+            if (audioTrack) {
+                audioTrack.enabled = !audioTrack.enabled;
+                isMicMuted = !audioTrack.enabled;
+                updateMediaButtonsUI();
+                showToast(isMicMuted ? 'Microphone Muted' : 'Microphone Unmuted', 'info');
+            }
+        }
+
+        function toggleCamera() {
+            if (!localStream) return;
+            const videoTrack = localStream.getVideoTracks()[0];
+            if (videoTrack) {
+                videoTrack.enabled = !videoTrack.enabled;
+                isCamOff = !videoTrack.enabled;
+                updateMediaButtonsUI();
+                showToast(isCamOff ? 'Camera Off' : 'Camera On', 'info');
+            }
+        }
+
+        async function toggleScreenShare() {
+            if (!isScreenSharing) {
+                try {
+                    const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+                    const screenTrack = screenStream.getVideoTracks()[0];
+                    localVideo.srcObject = screenStream;
+                    localVideo.classList.remove('mirror');
+                    isScreenSharing = true;
+
+                    if (currentCall && currentCall.peerConnection) {
+                        const sender = currentCall.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+                        if (sender) sender.replaceTrack(screenTrack);
+                    }
+
+                    screenTrack.onended = () => stopScreenShare();
+                    showToast('Screen sharing started', 'success');
+                } catch (err) {}
+            } else {
+                stopScreenShare();
+            }
+        }
+
+        function stopScreenShare() {
+            if (!localStream) return;
+            localVideo.srcObject = localStream;
+            localVideo.classList.add('mirror');
+            isScreenSharing = false;
+
+            if (currentCall && currentCall.peerConnection) {
+                const videoTrack = localStream.getVideoTracks()[0];
+                const sender = currentCall.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+                if (sender && videoTrack) sender.replaceTrack(videoTrack);
+            }
+            showToast('Screen sharing stopped', 'info');
+        }
+
+        function updateMediaButtonsUI() {
+            const btnMic = document.getElementById('btn-mic');
+            const btnCam = document.getElementById('btn-cam');
+            const camOffOverlay = document.getElementById('local-cam-off');
+
+            btnMic.className = isMicMuted
+                ? 'p-3.5 rounded-full bg-red-600/80 hover:bg-red-600 text-white transition'
+                : 'p-3.5 rounded-full bg-dark-700 hover:bg-dark-600 text-white transition';
+            btnMic.innerHTML = `<i data-lucide="${isMicMuted ? 'mic-off' : 'mic'}" class="w-5 h-5"></i>`;
+
+            btnCam.className = isCamOff
+                ? 'p-3.5 rounded-full bg-red-600/80 hover:bg-red-600 text-white transition'
+                : 'p-3.5 rounded-full bg-dark-700 hover:bg-dark-600 text-white transition';
+            btnCam.innerHTML = `<i data-lucide="${isCamOff ? 'video-off' : 'video'}" class="w-5 h-5"></i>`;
+
+            if (isCamOff) {
+                camOffOverlay.classList.remove('hidden');
+            } else {
+                camOffOverlay.classList.add('hidden');
+            }
+
+            lucide.createIcons();
+        }
+
+        // 11. Helpers: Timer, Clipboard, History
+        function startCallTimer() {
+            callSeconds = 0;
+            clearInterval(callTimerInterval);
+            callTimerInterval = setInterval(() => {
+                callSeconds++;
+                const mins = String(Math.floor(callSeconds / 60)).padStart(2, '0');
+                const secs = String(callSeconds % 60).padStart(2, '0');
+                document.getElementById('call-timer').textContent = `${mins}:${secs}`;
+            }, 1000);
+        }
+
+        function stopCallTimer() {
+            clearInterval(callTimerInterval);
+            document.getElementById('call-timer').textContent = '00:00';
+        }
+
+        function copyMyId() {
+            const idVal = myPeerIdInput.value;
+            if (!idVal || idVal === 'Not Logged In') return;
+            const tempInput = document.createElement('input');
+            tempInput.value = idVal;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+            showToast('Number copied!', 'success');
+        }
+
+        function addCallHistory(peerId, type, statusColorClass) {
+            totalCallsCount++;
+            localStorage.setItem('ir_total_calls', totalCallsCount);
+
+            const list = document.getElementById('call-history-list');
+            if (list.querySelector('p')) list.innerHTML = '';
+
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const item = document.createElement('div');
+            item.className = 'flex items-center justify-between p-3 rounded-2xl bg-dark-900 border border-dark-700 text-xs';
+            item.innerHTML = `
+                <div class="truncate pr-2">
+                    <p class="font-mono text-gray-200 truncate">${peerId}</p>
+                    <p class="${statusColorClass} text-[11px]">${type} • ${time}</p>
+                </div>
+                <button onclick="quickRedial('${peerId}')" class="p-2.5 rounded-xl bg-dark-700 hover:bg-brand-600 text-gray-200 hover:text-white transition" title="Call Again">
+                    <i data-lucide="phone-forwarded" class="w-4 h-4"></i>
+                </button>
+            `;
+            list.prepend(item);
+            lucide.createIcons();
+        }
+
+        function quickRedial(id) {
+            if (id === 'Self Translator Test') {
+                startDemoCall();
+            } else {
+                remotePeerIdInput.value = id;
+                startCall(true);
+            }
+        }
+
+        function clearHistory() {
+            document.getElementById('call-history-list').innerHTML = `<p class="text-xs text-gray-500 text-center py-8">Abhi tak koi call history nahi hai.</p>`;
+        }
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            applyAdminConfigToUI();
+            const savedUser = localStorage.getItem('ir_calling_user');
+            if (savedUser) {
+                currentUser = JSON.parse(savedUser);
+                await completeLogin();
+            }
+        });
+    </script>
+</body>
+</html>
